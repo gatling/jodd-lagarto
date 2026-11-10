@@ -1,6 +1,8 @@
 > **Gatling fork.** This fork is published as `io.gatling:jodd-lagarto`, a drop-in replacement for
 > `org.jodd:jodd-lagarto` (same packages), with CSSelly fixes that have been contributed upstream.
-> Releases are cut from the `gatling` branch by pushing a `v<version>` tag.
+> `main` is the Gatling branch: we push whatever we need there, such as the release setup, and merge the
+> branches we submit upstream as pull requests. `master` tracks upstream.
+> Releases are cut from `main` by pushing a `v<version>` tag.
 
 # Jodd Lagarto
 
