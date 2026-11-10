@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PROD_JODD_LAGARTO }}
+          aws-region: us-east-1
+
+      # Gradle 6.5.1 doesn't run on Java 17+
+      - name: Set up JDK 11
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Deploy
+        env:
+          AWS_CODEARTIFACT_DOMAIN: ${{ vars.AWS_CODEARTIFACT_DOMAIN }}
+          AWS_CODEARTIFACT_OWNER: ${{ vars.AWS_CODEARTIFACT_OWNER }}
+          SONATYPE_PGP_SECRET: ${{ secrets.SONATYPE_PGP_SECRET }}
+          SIGNING_PASSWORD: ${{ secrets.SONATYPE_PGP_PASSPHRASE }}
+          STAGING_REPOSITORY: ${{ vars.MAVEN_STAGING_REPOSITORY }}
+        run: |
+          echo -n "$SONATYPE_PGP_SECRET" | base64 --decode | gpg --batch --import
+          SIGNING_KEY="$(gpg --batch --pinentry-mode loopback --passphrase "$SIGNING_PASSWORD" --armor --export-secret-keys)"
+          export SIGNING_KEY
+
+          RELEASE_REPOSITORY_PASSWORD="$(aws codeartifact get-authorization-token --domain "$AWS_CODEARTIFACT_DOMAIN" --domain-owner "$AWS_CODEARTIFACT_OWNER" --query authorizationToken --output text)"
+          echo "::add-mask::$RELEASE_REPOSITORY_PASSWORD"
+          export RELEASE_REPOSITORY_PASSWORD
+          export RELEASE_REPOSITORY_USERNAME=aws
+          # MAVEN_STAGING_REPOSITORY is in the maven-deploy-plugin id::url format
+          export RELEASE_REPOSITORY_URL="${STAGING_REPOSITORY##*::}"
+
+          ./gradlew --no-daemon -PreleaseVersion="${GITHUB_REF_NAME#v}" build publishMavenJavaPublicationToReleaseRepository

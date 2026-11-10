@@ -1,3 +1,7 @@
+> **Gatling fork.** This fork is published as `io.gatling:jodd-lagarto`, a drop-in replacement for
+> `org.jodd:jodd-lagarto` (same packages), with CSSelly fixes that have been contributed upstream.
+> Releases are cut from the `gatling` branch by pushing a `v<version>` tag.
+
 # Jodd Lagarto
 
 [![Jodd](https://img.shields.io/badge/>-Jodd-orange)](https://github.com/oblac/jodd)

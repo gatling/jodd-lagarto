@@ -38,9 +38,10 @@ repositories {
 //	mavenLocal()
 }
 
-group = 'org.jodd'
-//version = '6.0.6.' + timestamp() + "-SNAPSHOT"
-version = '6.0.6'
+// Gatling fork: published as io.gatling:jodd-lagarto, a drop-in replacement for org.jodd:jodd-lagarto
+// the version is passed by the release workflow from the git tag
+group = 'io.gatling'
+version = findProperty('releaseVersion') ?: '0.0.0-SNAPSHOT'
 
 rootProject.description = 'Java HTML parsers suite'
 
@@ -56,7 +57,7 @@ java {
 
 dependencies {
 	api 'org.slf4j:slf4j-api:1.7.36'
-	api 'org.jodd:jodd-util:6.1.+'
+	api 'org.jodd:jodd-util:6.3.0'
 	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.+'
 	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.+'
 	testRuntimeOnly 'ch.qos.logback:logback-classic:1.2.11'
@@ -121,7 +122,8 @@ check.dependsOn jacocoTestReport
 // PUBLISH
 //
 
-ext.admin = hasProperty('sonatypeUsername')
+// releases are deployed to the repository given by the release workflow, eg Gatling's staging repository
+ext.releaseRepository = System.getenv('RELEASE_REPOSITORY_URL')
 
 publishing {
 	publications {
@@ -137,9 +139,9 @@ publishing {
 				}
 			}
 			pom {
-				name = 'Jodd Lagarto'
-				description = 'Java HTML/XML parsers suite'
-				url = 'https://lagarto.jodd.org'
+				name = 'Jodd Lagarto (Gatling fork)'
+				description = 'Java HTML/XML parsers suite, forked by Gatling with CSSelly fixes'
+				url = 'https://github.com/gatling/jodd-lagarto'
 				licenses {
 					license {
 						name = 'BSD-2-Clause'
@@ -155,22 +157,21 @@ publishing {
 					}
 				}
 				scm {
-					url = 'https://github.com/oblac/jodd-lagarto.git'
-					connection = 'scm:git:git://github.com/oblac/jodd-lagarto.git'
-					developerConnection = 'scm:git:ssh://git@github.com/oblac/jodd-lagarto.git'
+					url = 'https://github.com/gatling/jodd-lagarto'
+					connection = 'scm:git:git://github.com/gatling/jodd-lagarto.git'
+					developerConnection = 'scm:git:ssh://git@github.com/gatling/jodd-lagarto.git'
 				}
 			}
 		}
 	}
 	repositories {
-		maven {
-			def releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-			def snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
-			url = version.contains('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
-			if (admin) {
+		if (releaseRepository) {
+			maven {
+				name = 'release'
+				url = releaseRepository
 				credentials {
-					username sonatypeUsername
-					password sonatypePassword
+					username = System.getenv('RELEASE_REPOSITORY_USERNAME')
+					password = System.getenv('RELEASE_REPOSITORY_PASSWORD')
 				}
 			}
 		}
@@ -178,7 +179,11 @@ publishing {
 }
 
 signing {
-	required { admin }
+	required { releaseRepository != null }
+	def signingKey = System.getenv('SIGNING_KEY')
+	if (signingKey) {
+		useInMemoryPgpKeys(signingKey, System.getenv('SIGNING_PASSWORD'))
+	}
 	sign publishing.publications.mavenJava
 }
 
