@@ -116,7 +116,12 @@ class NodeSelectorComplexSelectorsTest {
 		assertEquals("li1", select("li:has(+ li.x)"));
 		assertEquals("li1", select("li:has(~ li.x)"));
 		assertEquals("p1", select("p:has(> b):not(.x)"));
-		assertEquals("main", select("div:has(:scope > span)"));
+	}
+
+	@Test
+	void testExplicitScopeNotSupportedInHas() {
+		// :scope in :has() is the scoping root of the whole selection, not the element tested by :has()
+		assertThrows(CSSellyException.class, () -> select("div:has(:scope > span)"));
 	}
 
 	@Test
@@ -133,9 +138,20 @@ class NodeSelectorComplexSelectorsTest {
 		assertEquals("p2", select(main, "> p + p"));
 		assertEquals("p1,p2,s1", select(main, "div:scope > *"));
 		assertEquals("", select(main, "ul:scope > *"));
-		// a relative selector from the document only matches its direct children
-		assertEquals("", select("> p"));
+		// only the descendants of the element are selected
+		assertEquals("", select(main, ":scope"));
 		assertThrows(CSSellyException.class, () -> select("div :scope"));
+	}
+
+	@Test
+	void testScopeFromDocument() {
+		// when selecting from a document, :scope is the root element, like in browsers
+		final Document doc = new LagartoDOMBuilder().parse("<html id='html'><body id='body'><p id='p'>p</p></body></html>");
+		assertEquals("html", select(doc, ":scope"));
+		assertEquals("body", select(doc, ":scope > body"));
+		assertEquals("", select(doc, ":scope > p"));
+		assertEquals("body", select(doc, "> body"));
+		assertEquals("p", select(doc, ":scope p"));
 	}
 
 	@Test
@@ -147,6 +163,30 @@ class NodeSelectorComplexSelectorsTest {
 		assertEquals("a1", select("[hreflang=en i]"));
 		assertEquals("a1", select("[href$='.HTML' i]"));
 		assertEquals("main", select("[lang|=EN i]"));
+	}
+
+	@Test
+	void testHtmlCaseInsensitiveAttributeValues() {
+		final String html = "<input id='i1' type='TEXT'><a id='a1' rel='NoFollow' title='Foo' hreflang='EN'>link</a>";
+		final Document doc = new LagartoDOMBuilder().parse(html);
+
+		// HTML lists attributes whose values are case-insensitive, like browsers
+		assertEquals("i1", select(doc, "[type=text]"));
+		assertEquals("i1", select(doc, "[TYPE=text]"));
+		assertEquals("a1", select(doc, "[rel=nofollow]"));
+		assertEquals("a1", select(doc, "[hreflang|=en]"));
+		assertEquals("a1", select(doc, "[rel^=no]"));
+		// unless the s flag is used
+		assertEquals("", select(doc, "[type=text s]"));
+		assertEquals("i1", select(doc, "[type=TEXT s]"));
+		// other attributes are case-sensitive
+		assertEquals("", select(doc, "[title=foo]"));
+		assertEquals("a1", select(doc, "[title=foo i]"));
+
+		// XML is case-sensitive
+		final Document xml = new LagartoDOMBuilder().enableXmlMode().parse(html);
+		assertEquals("", select(xml, "[type=text]"));
+		assertEquals("i1", select(xml, "[type=text i]"));
 	}
 
 	@Test
