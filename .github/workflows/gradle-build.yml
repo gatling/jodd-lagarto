@@ -1,0 +1,34 @@
+name: Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: [8, 11]
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Set up JDK ${{ matrix.jdk }}
+      uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+      with:
+        java-version: ${{ matrix.jdk }}
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+      with:
+        files: ./build/reports/jacoco/test/jacocoTestReport.xml
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true
