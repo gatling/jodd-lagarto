@@ -32,6 +32,7 @@ import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class JavascriptTest {
 
@@ -42,6 +43,8 @@ class JavascriptTest {
 		final ScriptEngineManager factory = new ScriptEngineManager();
 
 		scriptEngine = factory.getEngineByName("javascript");
+		// Nashorn was removed in Java 15
+		assumeTrue(scriptEngine != null, "No JavaScript engine");
 
 		scriptEngine.eval("$ = function(f) { return doc.s(f); }");
 	}

@@ -51,9 +51,11 @@ java {
 	withJavadocJar()
 }
 
-// Gradle runs on Java 17+, but the library targets Java 8
+// built with a modern JDK, but the library still targets Java 8
 tasks.withType(JavaCompile).configureEach {
 	options.release = 8
+	// javac warns that release 8 is obsolete
+	options.compilerArgs << '-Xlint:-options'
 }
 
 configurations {
@@ -118,13 +120,6 @@ javadoc {
 
 test {
 	useJUnitPlatform()
-	// tests can run on another JVM than Gradle's, eg: -PtestJavaVersion=8
-	def testJavaVersion = findProperty('testJavaVersion')
-	if (testJavaVersion) {
-		javaLauncher = javaToolchains.launcherFor {
-			languageVersion = JavaLanguageVersion.of(testJavaVersion as int)
-		}
-	}
 	testLogging {
 		events "standardOut", "passed", "skipped", "failed"
 		showExceptions = true

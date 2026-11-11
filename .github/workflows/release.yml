@@ -26,14 +26,11 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_PROD_JODD_LAGARTO }}
           aws-region: us-east-1
 
-      # Gradle runs on JDK 21 (the last one, which is the default), tests run on JDK 8
-      - name: Set up JDK 8 and 21
+      - name: Set up JDK
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: 'zulu'
-          java-version: |
-            8
-            21
+          java-version: '25'
 
       - name: Deploy
         env:
@@ -54,4 +51,4 @@ jobs:
           # MAVEN_STAGING_REPOSITORY is in the maven-deploy-plugin id::url format
           export RELEASE_REPOSITORY_URL="${STAGING_REPOSITORY##*::}"
 
-          ./gradlew --no-daemon -PtestJavaVersion=8 -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_8_X64 -PreleaseVersion="${GITHUB_REF_NAME#v}" build publishMavenJavaPublicationToReleaseRepository
+          ./gradlew --no-daemon -PreleaseVersion="${GITHUB_REF_NAME#v}" build publishMavenJavaPublicationToReleaseRepository
