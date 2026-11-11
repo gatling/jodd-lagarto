@@ -28,9 +28,7 @@ plugins {
 	id 'maven-publish'
 	id 'jacoco'
 	id 'signing'
-	id 'io.codearte.nexus-staging' version '0.21.2'
-	id 'org.xbib.gradle.plugin.jflex' version '1.4.0'
-	id 'biz.aQute.bnd.builder' version '5.2.0'
+	id 'biz.aQute.bnd.builder' version '7.4.0'
 }
 
 repositories {
@@ -49,28 +47,58 @@ ext {
 }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_1_8
-	targetCompatibility = JavaVersion.VERSION_1_8
 	withSourcesJar()
 	withJavadocJar()
 }
 
+// Gradle runs on Java 17+, but the library targets Java 8
+tasks.withType(JavaCompile).configureEach {
+	options.release = 8
+}
+
+configurations {
+	jflex
+}
+
 dependencies {
+	// the skeleton is for JFlex 1.8.2
+	jflex 'de.jflex:jflex:1.8.2'
 	api 'org.slf4j:slf4j-api:1.7.36'
 	api 'org.jodd:jodd-util:6.3.0'
 	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.+'
 	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.+'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.8.+'
 	testRuntimeOnly 'ch.qos.logback:logback-classic:1.2.11'
 }
 
-jflex {
-	verbose true
-	statistics true
-	skel file('src/main/jflex/jodd/csselly/skeleton-1.8.2.jodd')
+// the generated lexer is committed, it's regenerated when the grammar changes
+def generateLexer = tasks.register('generateLexer', JavaExec) {
+	group = 'Build'
+	description = 'Generates the CSSelly lexer with JFlex'
+	def grammar = 'src/main/jflex/jodd/csselly/csselly.jflex'
+	def skeleton = 'src/main/jflex/jodd/csselly/skeleton-1.8.2.jodd'
+	def outputDir = 'src/main/java/jodd/csselly'
+	inputs.files(grammar, skeleton)
+	outputs.file("${outputDir}/CSSellyLexer.java")
+	classpath = configurations.jflex
+	mainClass = 'jflex.Main'
+	workingDir = projectDir
+	// relative paths, so the generated lexer doesn't depend on where the project is
+	args '-q', '--nobak', '--skel', skeleton, '-d', outputDir, grammar
+}
+
+tasks.named('compileJava') {
+	dependsOn generateLexer
+}
+
+tasks.named('sourcesJar') {
+	dependsOn generateLexer
 }
 
 jar {
-	bnd('-exportcontents': 'jodd.*')
+	bundle {
+		bnd('-exportcontents': 'jodd.*')
+	}
 	manifest {
 		attributes(
 				'Implementation-Title': project.name,
@@ -90,14 +118,28 @@ javadoc {
 
 test {
 	useJUnitPlatform()
+	// tests can run on another JVM than Gradle's, eg: -PtestJavaVersion=8
+	def testJavaVersion = findProperty('testJavaVersion')
+	if (testJavaVersion) {
+		javaLauncher = javaToolchains.launcherFor {
+			languageVersion = JavaLanguageVersion.of(testJavaVersion as int)
+		}
+	}
 	testLogging {
 		events "standardOut", "passed", "skipped", "failed"
-		showExceptions true
-		exceptionFormat "full"
-		showCauses true
-		showStackTraces true
+		showExceptions = true
+		exceptionFormat = "full"
+		showCauses = true
+		showStackTraces = true
+	}
 
-		afterSuite { desc, result ->
+	addTestListener(new TestListener() {
+		@Override
+		void beforeSuite(TestDescriptor suite) {
+		}
+
+		@Override
+		void afterSuite(TestDescriptor desc, TestResult result) {
 			if (!desc.parent) { // will match the outermost suite
 				def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} successes, ${result.failedTestCount} failures, ${result.skippedTestCount} skipped)"
 				def startItem = '|  ', endItem = '  |'
@@ -105,14 +147,22 @@ test {
 				println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
 			}
 		}
-	}
+
+		@Override
+		void beforeTest(TestDescriptor testDescriptor) {
+		}
+
+		@Override
+		void afterTest(TestDescriptor testDescriptor, TestResult result) {
+		}
+	})
 }
 
 jacocoTestReport {
 	reports {
-		xml.enabled true
-		csv.enabled false
-		html.enabled true
+		xml.required = true
+		csv.required = false
+		html.required = true
 	}
 }
 
@@ -179,7 +229,7 @@ publishing {
 }
 
 signing {
-	required { releaseRepository != null }
+	required = { releaseRepository != null }
 	def signingKey = System.getenv('SIGNING_KEY')
 	if (signingKey) {
 		useInMemoryPgpKeys(signingKey, System.getenv('SIGNING_PASSWORD'))
@@ -187,7 +237,8 @@ signing {
 	sign publishing.publications.mavenJava
 }
 
-task install(dependsOn: publishToMavenLocal) {
+tasks.register('install') {
+	dependsOn publishToMavenLocal
 	group = 'Publishing'
 	description = 'Installs artifacts to local Maven repository'
 }
@@ -196,9 +247,9 @@ task install(dependsOn: publishToMavenLocal) {
 // RELEASE
 //
 
-task release() {
-	group 'Project'
-	description 'Rebuilds everything for the release.'
+tasks.register('release') {
+	group = 'Project'
+	description = 'Rebuilds everything for the release.'
 
 	dependsOn clean
 	dependsOn build
